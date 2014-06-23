@@ -348,6 +348,13 @@ $rdf.Fetcher = function(store, timeout, async) {
                     return
                 }
 
+                if (rt.slice(0, 500).match(/["']@(context|vocab)["']:/)) {
+                    sf.addStatus(xhr.req, "May be JSON-LD. We'll assume it's that "
+                            + "but its content-type wasn't JSON or JSON-LD.\n")
+                    sf.switchHandler('JSONLDHandler', xhr, cb)
+                    return
+                }
+
                 // We give up finding semantics - this is not an error, just no data
                 sf.addStatus(xhr.req, "Plain text document, no known RDF semantics.");
                 sf.doneFetch(xhr, [xhr.uri.uri]);
@@ -412,6 +419,68 @@ $rdf.Fetcher = function(store, timeout, async) {
         } // pre 2008
     }
     $rdf.Fetcher.N3Handler.pattern = new RegExp("(application|text)/(x-)?(rdf\\+)?(n3|turtle)")
+
+    /***********************************************/
+
+    $rdf.Fetcher.JSONLDHandler = function() {
+        this.handlerFactory = function(xhr) {
+            xhr.handle = function(cb) {
+                console.log("there is text");
+                // Parse the text of this non-XML file
+                //$rdf.log.debug("web.js: Parsing as JSON-LD " + xhr.uri.uri);
+                var rt = xhr.responseText;
+                var nodemapper = [];
+                var convert = function convert(jsonldthing)
+                {
+                    if (jsonldthing.type === 'IRI')
+                        return sf.store.sym(jsonldthing.value);
+                    else if (jsonldthing.type === 'blank node')
+                    {
+                        if (nodemapper[jsonldthing.value] === undefined)
+                            nodemapper[jsonldthing.value] = sf.store.bnode();
+                        return nodemapper[jsonldthing.value];
+                    }
+                    else if (jsonldthing.type === 'literal')
+                    {
+                        return sf.store.literal(jsonldthing.value, jsonldthing.language, jsonldthing.datatype ? sf.store.sym(jsonldthing.datatype) : undefined);
+                    }
+                    else
+                        throw new TypeError('JSON-LD library generated unexpected type ' + jsonldthing.type + '.');
+                }
+                try {
+                    jsonld.toRDF(JSON.parse(rt), {'base': xhr.uri.uri}, function(err, data) {
+                        if (err === null) {
+                            console.log("no err, data", data);
+                            for (var i in data['@default'])
+                            {
+                                var stmt = data['@default'][i];
+                                sf.store.add(convert(stmt.subject), convert(stmt.predicate), convert(stmt.object), xhr.uri);
+                                var s = data['@default'][i].subject
+                            }
+                            sf.addStatus(xhr.req, "JSON-LD parsed: " + data['@default'].length + " triples.")
+                            sf.store.add(xhr.uri, ns.rdf('type'), ns.link('RDFDocument'), sf.appNode);
+                            args = [xhr.uri.uri]; // Other args needed ever?
+                            sf.doneFetch(xhr, args)
+                        } else {
+                            sf.failFetch(xhr, "Error trying to parse " + xhr.uri + " as JSON-LD:\n" + err + ':\n' + e.stack);
+                        }
+                    });
+                } catch (e) {
+                    var msg = ("Error trying to parse " + xhr.uri + " as JSON-LD:\n" + e +':\n'+e.stack)
+                    // dump(msg+"\n")
+                    sf.failFetch(xhr, msg)
+                    return;
+                }
+            }
+        }
+    };
+    $rdf.Fetcher.JSONLDHandler.term = this.store.sym(this.thisURI + ".JSONLDHandler");
+    $rdf.Fetcher.JSONLDHandler.toString = function() { return "JSONLDHandler"; };
+    $rdf.Fetcher.JSONLDHandler.register = function(sf) {
+        sf.mediatypes['application/ld+json'] = {'q': '1.0'};
+        sf.mediatypes['application/json'] = {'q': '0.1'};
+    }
+    $rdf.Fetcher.JSONLDHandler.pattern = new RegExp("application/(ld\\+)?json");
 
     /***********************************************/
 
@@ -493,7 +562,7 @@ $rdf.Fetcher = function(store, timeout, async) {
     this.store.add(this.appNode, ns.rdfs('label'), this.store.literal('This Session'), this.appNode);
 
     ['http', 'https', 'file', 'chrome'].map(this.addProtocol); // ftp?
-    [$rdf.Fetcher.RDFXMLHandler, $rdf.Fetcher.XHTMLHandler, $rdf.Fetcher.XMLHandler, $rdf.Fetcher.HTMLHandler, $rdf.Fetcher.TextHandler, $rdf.Fetcher.N3Handler, ].map(this.addHandler)
+    [$rdf.Fetcher.RDFXMLHandler, $rdf.Fetcher.XHTMLHandler, $rdf.Fetcher.XMLHandler, $rdf.Fetcher.HTMLHandler, $rdf.Fetcher.TextHandler, $rdf.Fetcher.N3Handler, $rdf.Fetcher.JSONLDHandler, ].map(this.addHandler)
 
 
  
@@ -1283,6 +1352,8 @@ $rdf.parse = function parse(str, kb, base, contentType) {
             p.loadBuf(str);
             return;
         }
+
+        // FIXME jsonld here too? how'd i test it?
 
         if (contentType == 'application/rdf+xml') {
             var parser = new $rdf.RDFParser(kb);
