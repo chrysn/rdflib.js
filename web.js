@@ -91,9 +91,20 @@ $rdf.Fetcher = function(store, timeout, async) {
                 } else {
                     lastRequested = kb.sym(lastRequested.value);
                 }
+                var baseuri = lastRequested.uri;
+                if (xhr.headers['content-location'])
+                {
+                    // might be troublesome if we didn't get redirects and
+                    // content-location is relative, but better than ignoring
+                    // it
+                    //
+                    // trimming is required because iceweasel seems to not
+                    // discard the delimiting \r in the fields
+                    baseuri = $rdf.uri.join(xhr.headers['content-location'].trim(), baseuri);
+                }
                 var parser = new $rdf.RDFParser(kb);
                 // sf.addStatus(xhr.req, 'parsing as RDF/XML...');
-                parser.parse(this.dom, lastRequested.uri, lastRequested);
+                parser.parse(this.dom, baseuri, lastRequested);
                 kb.add(lastRequested, ns.rdf('type'), ns.link('RDFDocument'), sf.appNode);
                 cb();
             }
@@ -377,7 +388,22 @@ $rdf.Fetcher = function(store, timeout, async) {
                 $rdf.log.debug("web.js: Parsing as N3 " + xhr.uri.uri); // @@@@ comment me out 
                 //sf.addStatus(xhr.req, "N3 not parsed yet...")
                 var rt = xhr.responseText
-                var p = $rdf.N3Parser(kb, kb, xhr.uri.uri, xhr.uri.uri, null, null, "", null)
+
+		// at this place, the rdf parser has played around a bit with
+		// lastRequested. should we do the same here?
+                var baseuri = xhr.uri.uri;
+                if (xhr.headers['content-location'])
+                {
+                    // might be troublesome if we didn't get redirects and
+                    // content-location is relative, but better than ignoring
+                    // it
+                    //
+                    // trimming is required because iceweasel seems to not
+                    // discard the delimiting \r in the fields
+                    baseuri = $rdf.uri.join(xhr.headers['content-location'].trim(), baseuri);
+                }
+
+                var p = $rdf.N3Parser(kb, kb, xhr.uri.uri, baseuri, null, null, "", null)
                 //                p.loadBuf(xhr.responseText)
                 try {
                     p.loadBuf(xhr.responseText)
