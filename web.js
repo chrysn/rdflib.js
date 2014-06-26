@@ -425,7 +425,6 @@ $rdf.Fetcher = function(store, timeout, async) {
     $rdf.Fetcher.JSONLDHandler = function() {
         this.handlerFactory = function(xhr) {
             xhr.handle = function(cb) {
-                console.log("there is text");
                 // Parse the text of this non-XML file
                 //$rdf.log.debug("web.js: Parsing as JSON-LD " + xhr.uri.uri);
                 var rt = xhr.responseText;
@@ -450,7 +449,6 @@ $rdf.Fetcher = function(store, timeout, async) {
                 try {
                     jsonld.toRDF(JSON.parse(rt), {'base': xhr.uri.uri}, function(err, data) {
                         if (err === null) {
-                            console.log("no err, data", data);
                             for (var i in data['@default'])
                             {
                                 var stmt = data['@default'][i];
