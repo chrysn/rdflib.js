@@ -92,15 +92,10 @@ $rdf.Fetcher = function(store, timeout, async) {
                     lastRequested = kb.sym(lastRequested.value);
                 }
                 var baseuri = lastRequested.uri;
-                if (xhr.headers['content-location'])
+                if (xhr.baseUri)
                 {
-                    // might be troublesome if we didn't get redirects and
-                    // content-location is relative, but better than ignoring
-                    // it
-                    //
-                    // trimming is required because iceweasel seems to not
-                    // discard the delimiting \r in the fields
-                    baseuri = $rdf.uri.join(xhr.headers['content-location'].trim(), baseuri);
+                    // this gets set when a proxy is configured
+                    baseuri = $rdf.uri.join(xhr.baseUri, baseuri);
                 }
                 var parser = new $rdf.RDFParser(kb);
                 // sf.addStatus(xhr.req, 'parsing as RDF/XML...');
@@ -392,15 +387,10 @@ $rdf.Fetcher = function(store, timeout, async) {
 		// at this place, the rdf parser has played around a bit with
 		// lastRequested. should we do the same here?
                 var baseuri = xhr.uri.uri;
-                if (xhr.headers['content-location'])
+                if (xhr.baseUri)
                 {
-                    // might be troublesome if we didn't get redirects and
-                    // content-location is relative, but better than ignoring
-                    // it
-                    //
-                    // trimming is required because iceweasel seems to not
-                    // discard the delimiting \r in the fields
-                    baseuri = $rdf.uri.join(xhr.headers['content-location'].trim(), baseuri);
+                    // this gets set when a proxy is configured
+                    baseuri = $rdf.uri.join(xhr.baseUri, baseuri);
                 }
 
                 var p = $rdf.N3Parser(kb, kb, xhr.uri.uri, baseuri, null, null, "", null)
@@ -733,10 +723,10 @@ $rdf.Fetcher = function(store, timeout, async) {
                     //sf.fireCallbacks('done', args) // Are these args right? @@@
                     sf.requested[xhr.uri.uri] = 'redirected';
 
-                    var xhr2 = sf.requestURI(newURI, xhr.uri);
-                    xhr2.proxyUsed = true; //only try the proxy once
-
+                    var xhr2 = sf.requestURI(newURI, xhr.uri, force);
                     if (xhr2 && xhr2.req) {
+                        xhr2.proxyUsed = true; //only try the proxy once
+                        xhr2.baseUri = xhr.uri.uri;
                         kb.add(xhr.req,
                             kb.sym('http://www.w3.org/2007/ont/link#redirectedRequest'),
                             xhr2.req,
@@ -897,6 +887,7 @@ $rdf.Fetcher = function(store, timeout, async) {
 
             switch (xhr.readyState) {
             case 0:
+                    throw("I assert that this is dead code."); // looks like duplicate of onerrorFactory code but with some mechanisms not yet implemented (eg proxyUsed)
                     var uri = xhr.uri.uri, newURI;
                     if (this.crossSiteProxyTemplate && document && document.location) { // In mashup situation
                         var hostpart = $rdf.uri.hostpart;
