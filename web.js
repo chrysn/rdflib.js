@@ -462,8 +462,16 @@ $rdf.Fetcher = function(store, timeout, async) {
                     else
                         throw new TypeError('JSON-LD library generated unexpected type ' + jsonldthing.type + '.');
                 }
+		// at this place, the rdf parser has played around a bit with
+		// lastRequested. should we do the same here?
+                var baseuri = xhr.uri.uri;
+                if (xhr.baseUri)
+                {
+                    // this gets set when a proxy is configured
+                    baseuri = $rdf.uri.join(xhr.baseUri, baseuri);
+                }
                 try {
-                    jsonld.toRDF(JSON.parse(rt), {'base': xhr.uri.uri}, function(err, data) {
+                    jsonld.toRDF(JSON.parse(rt), {'base': baseuri}, function(err, data) {
                         if (err === null) {
                             for (var i in data['@default'])
                             {
