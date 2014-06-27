@@ -91,9 +91,15 @@ $rdf.Fetcher = function(store, timeout, async) {
                 } else {
                     lastRequested = kb.sym(lastRequested.value);
                 }
+                var baseuri = lastRequested.uri;
+                if (xhr.baseUri)
+                {
+                    // this gets set when a proxy is configured
+                    baseuri = $rdf.uri.join(xhr.baseUri, baseuri);
+                }
                 var parser = new $rdf.RDFParser(kb);
                 // sf.addStatus(xhr.req, 'parsing as RDF/XML...');
-                parser.parse(this.dom, lastRequested.uri, lastRequested);
+                parser.parse(this.dom, baseuri, lastRequested);
                 kb.add(lastRequested, ns.rdf('type'), ns.link('RDFDocument'), sf.appNode);
                 cb();
             }
@@ -384,7 +390,17 @@ $rdf.Fetcher = function(store, timeout, async) {
                 $rdf.log.debug("web.js: Parsing as N3 " + xhr.uri.uri); // @@@@ comment me out 
                 //sf.addStatus(xhr.req, "N3 not parsed yet...")
                 var rt = xhr.responseText
-                var p = $rdf.N3Parser(kb, kb, xhr.uri.uri, xhr.uri.uri, null, null, "", null)
+
+		// at this place, the rdf parser has played around a bit with
+		// lastRequested. should we do the same here?
+                var baseuri = xhr.uri.uri;
+                if (xhr.baseUri)
+                {
+                    // this gets set when a proxy is configured
+                    baseuri = $rdf.uri.join(xhr.baseUri, baseuri);
+                }
+
+                var p = $rdf.N3Parser(kb, kb, xhr.uri.uri, baseuri, null, null, "", null)
                 //                p.loadBuf(xhr.responseText)
                 try {
                     p.loadBuf(xhr.responseText)
@@ -774,10 +790,10 @@ $rdf.Fetcher = function(store, timeout, async) {
                     //sf.fireCallbacks('done', args) // Are these args right? @@@
                     sf.requested[xhr.uri.uri] = 'redirected';
 
-                    var xhr2 = sf.requestURI(newURI, xhr.uri);
-                    xhr2.proxyUsed = true; //only try the proxy once
-
+                    var xhr2 = sf.requestURI(newURI, xhr.uri, force);
                     if (xhr2 && xhr2.req) {
+                        xhr2.proxyUsed = true; //only try the proxy once
+                        xhr2.baseUri = xhr.uri.uri;
                         kb.add(xhr.req,
                             kb.sym('http://www.w3.org/2007/ont/link#redirectedRequest'),
                             xhr2.req,
@@ -938,6 +954,7 @@ $rdf.Fetcher = function(store, timeout, async) {
 
             switch (xhr.readyState) {
             case 0:
+                    throw("I assert that this is dead code."); // looks like duplicate of onerrorFactory code but with some mechanisms not yet implemented (eg proxyUsed)
                     var uri = xhr.uri.uri, newURI;
                     if (this.crossSiteProxyTemplate && document && document.location) { // In mashup situation
                         var hostpart = $rdf.uri.hostpart;
